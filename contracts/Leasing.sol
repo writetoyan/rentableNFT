@@ -28,6 +28,18 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
         uint256 numberOfPaymentMade;
     }
 
+    event LeasingMinted(
+        uint256 indexed tokenId,
+        string  indexed tokenURI, 
+        string  indexed carModel,
+        uint256 leasingDurationInMonth,
+        uint256 upfrontPayment,
+        uint256 monthlyPayment,
+        uint256 purchaseOptionPrice
+    );
+    event LesseeSetted(uint256 indexed tokenId, address indexed lesseeAddress, string indexed lesseeName);
+    event MonthlyLeasingPaid(uint256 indexed tokenId, address indexed lessee, uint256 indexed rent);
+
     bool internal _purchased;
     mapping(uint256 => LeasingInfo) public leases;
 
@@ -51,6 +63,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
         _safeMint(msg.sender, newItemId);
         _setTokenURI(newItemId, _tokenURI);
         return newItemId;
+        emit LeasingMinted(newItemId, _tokenURI, _carModel, _leasingDurationInMonth, _upfrontPayment, _monthlyPayment, _purchaseOptionPrice);
     }
 
     function setLessee(uint256 _tokenId, address _lesseeAddress, string memory _lesseeName) external {
@@ -59,6 +72,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
         leases[_tokenId].lesseeName = _lesseeName;
         _users[_tokenId].expires = uint64(block.timestamp + 30 days);
         setUser(_tokenId, _lesseeAddress, _users[_tokenId].expires);
+        emit LesseeSetted(_tokenId, _lesseeAddress, _lesseeName);
     }
 
     function renewMonthlyLeasing(uint256 _tokenId) external payable {
@@ -68,6 +82,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
         uint64 nextPaymentDate = _users[_tokenId].expires + 30 days;
         leases[_tokenId].numberOfPaymentMade += 1; 
         setUser(_tokenId, leases[_tokenId].lesseeAddress, nextPaymentDate);
+        emit MonthlyLeasingPaid(_tokenId, msg.sender, msg.value);
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public override {

@@ -37,6 +37,24 @@ contract Marketplace is ReentrancyGuard {
         uint64 expires;
     }
 
+    event NftListed(
+        address owner,
+        address tenant,
+        address indexed nftAddress,
+        uint indexed tokenId,
+        uint256 indexed rentPrice,
+        uint256 upfrontPayment,
+        uint256 purchaseOptionPrice,
+        uint256 leasingDurationInMonth,
+        uint256 numberOfPaymentMade,
+        uint64 rentDuration,
+        uint64 expires
+    );
+    event NftRented(address indexed tenant, address indexed nftAddress, uint256 indexed tokenId, uint256 rent, uint256 expires);
+    event CarLeased(address indexed lessee, address indexed nftAddress, uint256 indexed tokenId, string lesseeName);
+    event LeasePaid(address indexed lessee, address indexed nftAddres, uint256 indexed tokenId);
+    event OptionExercised(address indexed buyer, address indexed _nftAddress, uint256 indexed tokenId);
+
     mapping(address => mapping(uint256 => Listing)) public listings;
 
     function listNft(address _nftAddress, uint256 _tokenId, uint256 _rentPrice, uint256 _upFrontPayment, uint256 _purchasOptionPrice, uint256 _leasingDurationInMonth, uint256 _numberOfPaymentMade, uint64 _rentDuration) external payable {
@@ -47,6 +65,19 @@ contract Marketplace is ReentrancyGuard {
             revert Marketplace__lastRentingPeriodNotOver();
         }
         listings[_nftAddress][_tokenId] = Listing(
+            msg.sender,
+            address(0),
+            _nftAddress,
+            _tokenId,
+            _rentPrice,
+            _upFrontPayment,
+            _purchasOptionPrice,
+            _leasingDurationInMonth,
+            _numberOfPaymentMade,
+            _rentDuration,
+            0
+        );
+        emit NftListed(    
             msg.sender,
             address(0),
             _nftAddress,
@@ -72,6 +103,7 @@ contract Marketplace is ReentrancyGuard {
         IERC4907(_nftAddress).setUser(_tokenId, msg.sender, expires);
         listings[_nftAddress][_tokenId].tenant = msg.sender;
         listings[_nftAddress][_tokenId].expires = expires;
+        emit NftRented(msg.sender, _nftAddress, _tokenId, msg.value, expires);
     }
 
     function lease(address _nftAddress, uint256 _tokenId, string memory _lesseeName) external payable {
@@ -79,6 +111,7 @@ contract Marketplace is ReentrancyGuard {
             revert Marketplace__AmountSentTooLow();
         }
         ILeasing(_nftAddress).setLessee(_tokenId, msg.sender, _lesseeName);
+        emit CarLeased(msg.sender, _nftAddress, _tokenId, _lesseeName);
     }
 
     function payLease(address _nftAddress, uint256 _tokenId) external payable {
@@ -87,6 +120,7 @@ contract Marketplace is ReentrancyGuard {
         }
         listings[_nftAddress][_tokenId].numberOfPaymentMade += 1;
         ILeasing(_nftAddress).renewMonthlyLeasing(_tokenId);
+        emit LeasePaid(msg.sender, _nftAddress, _tokenId)
     }
 
     function buyLease(address _nftAddress, uint256 _tokenId) external payable {
@@ -98,5 +132,6 @@ contract Marketplace is ReentrancyGuard {
         }
         ILeasing(_nftAddress)._optionToBuy();
         ILeasing(_nftAddress).safeTransferFrom(listings[_nftAddress][_tokenId].owner, msg.sender, _tokenId);
+        emit OptionExercised(msg.sender, _nftAddress, tokenId);
     }
 }
