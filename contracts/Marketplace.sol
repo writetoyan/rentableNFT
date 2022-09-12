@@ -10,6 +10,7 @@ import "./Leasing.sol";
 interface ILeasing {
     function setLessee(uint256 _tokenId, address _lesseeAddress, string memory _lesseeName) external;
     function renewMonthlyLeasing(uint256 _tokenId) external payable;
+    function _optionToBuy() internal;
 }
 
 error Marketplace__notTheOwnerOfTheNft();
@@ -26,8 +27,10 @@ contract Marketplace is ReentrancyGuard {
         address nftAddress;
         uint tokenId;
         uint256 rentPrice;
+        uint256 sellPrice;
         uint64 rentDuration;
         uint64 expires;
+
     }
 
     mapping(address => mapping(uint256 => Listing)) public listings;
@@ -73,6 +76,12 @@ contract Marketplace is ReentrancyGuard {
         }
         ILeasing(_nftAddress).renewMonthlyLeasing(_tokenId);
     }
-    
 
+    function buyLease(address _nftAddress, uint256 _tokenId) external payable {
+        if(msg.value < listings[nftAddress][_tokenId].sellPrice) {
+            revert Marketplace__AmountSentTooLow();
+        }
+        ILease(_nftAddress)._optionToBuy();
+        Ilease(_nftAddress).saferTransferFrom(listings[_nftAddress][_tokenId].owner, msg.sender, _tokenId);
+    }
 }

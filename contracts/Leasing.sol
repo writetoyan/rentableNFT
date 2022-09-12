@@ -9,7 +9,7 @@ import './ERC4907.sol';
 
 error Leasing__PaymentTooLateOrLeaseAllPaid();
 error Leasing__OnlyCurrentLeaserCanRenew();
-Leasing__WrongLessee();
+error Leasing__WrongLessee();
 
 contract Leasing is ERC721URIStorage, ERC4907, Ownable {
     
@@ -28,6 +28,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
         uint256 numberOfPaymentMade;
     }
 
+    bool private _purchased;
     mapping(uint256 => LeasingInfo) public leases;
 
     constructor() ERC4907("Car Leasing", "CL") {}
@@ -70,21 +71,29 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public override {
-        if (to != leases[tokenId].lesseeAddress) {
-            revert Leasing__WrongLessee();
+        if (_users[tokenId].user != address(0)) {
+            if (!_purchased || to != leases[tokenId].lesseeAddress) {
+                revert Leasing__WrongLessee();
+            }
         }
         super.transferFrom(from, to, tokenId);
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) public override {
-        if (to != leases[tokenId].lesseeAddress) {
-            revert Leasing__WrongLessee();
+        if (_users[tokenId].user != address(0)) {
+            if (!_purchased || to != leases[tokenId].lesseeAddress) {
+                revert Leasing__WrongLessee();
+            }
         }
         super.safeTransferFrom(from, to, tokenId);
     }
 
     function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, ERC4907) returns (bool) {
         return super.supportsInterface(interfaceId);
+    }
+
+    function _optionToBuy() internal {
+        _purchased = true;
     }
 
 }
