@@ -10,14 +10,16 @@ import "./Leasing.sol";
 interface ILeasing {
     function setLessee(uint256 _tokenId, address _lesseeAddress, string memory _lesseeName) external;
     function renewMonthlyLeasing(uint256 _tokenId) external payable;
-    function _optionToBuy() internal;
+    function safeTransferFrom(address from, address to, uint256 tokenId) external;
+    function _optionToBuy() external;
 }
 
 error Marketplace__notTheOwnerOfTheNft();
 error Marketplace__AmountSentTooLow();
 error Marketplace__NftAlreadyRented();
 error Marketplace__lastRentingPeriodNotOver();
-error Leasing__PaymentAmountDoesNotMatch();
+error Marketplace__PaymentAmountDoesNotMatch();
+error Marketplace__YouCannotPurchaseYet();
 
 contract Marketplace is ReentrancyGuard {
 
@@ -27,15 +29,17 @@ contract Marketplace is ReentrancyGuard {
         address nftAddress;
         uint tokenId;
         uint256 rentPrice;
-        uint256 sellPrice;
+        uint256 upfrontPayment;
+        uint256 purchaseOptionPrice;
+        uint256 leasingDurationInMonth;
+        uint256 numberOfPaymentMade;
         uint64 rentDuration;
         uint64 expires;
-
     }
 
     mapping(address => mapping(uint256 => Listing)) public listings;
 
-    function listNft(address _nftAddress, uint256 _tokenId, uint256 _rentPrice, uint64 _rentDuration) external payable {
+    function listNft(address _nftAddress, uint256 _tokenId, uint256 _rentPrice, uint256 _upFrontPayment, uint256 _purchasOptionPrice, uint256 _leasingDurationInMonth, uint256 _numberOfPaymentMade, uint64 _rentDuration) external payable {
         if(msg.sender != IERC721(_nftAddress).ownerOf(_tokenId)) {
             revert Marketplace__notTheOwnerOfTheNft();
         }
@@ -48,6 +52,10 @@ contract Marketplace is ReentrancyGuard {
             _nftAddress,
             _tokenId,
             _rentPrice,
+            _upFrontPayment,
+            _purchasOptionPrice,
+            _leasingDurationInMonth,
+            _numberOfPaymentMade,
             _rentDuration,
             0
         );
@@ -67,21 +75,28 @@ contract Marketplace is ReentrancyGuard {
     }
 
     function lease(address _nftAddress, uint256 _tokenId, string memory _lesseeName) external payable {
+        if(msg.value < listings[_nftAddress][_tokenId].upfrontPayment + listings[_nftAddress][_tokenId].rentPrice) {
+            revert Marketplace__AmountSentTooLow();
+        }
         ILeasing(_nftAddress).setLessee(_tokenId, msg.sender, _lesseeName);
     }
 
     function payLease(address _nftAddress, uint256 _tokenId) external payable {
         if(msg.value != listings[_nftAddress][_tokenId].rentPrice) {
-            revert Leasing__PaymentAmountDoesNotMatch();
+            revert Marketplace__PaymentAmountDoesNotMatch();
         }
+        listings[_nftAddress][_tokenId].numberOfPaymentMade += 1;
         ILeasing(_nftAddress).renewMonthlyLeasing(_tokenId);
     }
 
     function buyLease(address _nftAddress, uint256 _tokenId) external payable {
-        if(msg.value < listings[nftAddress][_tokenId].sellPrice) {
+        if(msg.value < listings[_nftAddress][_tokenId].purchaseOptionPrice) {
             revert Marketplace__AmountSentTooLow();
         }
-        ILease(_nftAddress)._optionToBuy();
-        Ilease(_nftAddress).saferTransferFrom(listings[_nftAddress][_tokenId].owner, msg.sender, _tokenId);
+        if(listings[_nftAddress][_tokenId].numberOfPaymentMade < listings[_nftAddress][_tokenId].leasingDurationInMonth - 1) {
+            revert Marketplace__YouCannotPurchaseYet();
+        }
+        ILeasing(_nftAddress)._optionToBuy();
+        ILeasing(_nftAddress).safeTransferFrom(listings[_nftAddress][_tokenId].owner, msg.sender, _tokenId);
     }
 }

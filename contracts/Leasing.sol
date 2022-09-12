@@ -28,7 +28,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
         uint256 numberOfPaymentMade;
     }
 
-    bool private _purchased;
+    bool internal _purchased;
     mapping(uint256 => LeasingInfo) public leases;
 
     constructor() ERC4907("Car Leasing", "CL") {}
@@ -62,7 +62,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
     }
 
     function renewMonthlyLeasing(uint256 _tokenId) external payable {
-        if(block.timestamp > _users[_tokenId].expires || leases[_tokenId].numberOfPaymentMade > leases[_tokenId].leasingDurationInMonth - 1) {
+        if(block.timestamp > _users[_tokenId].expires || leases[_tokenId].numberOfPaymentMade >= leases[_tokenId].leasingDurationInMonth - 1) {
             revert Leasing__PaymentTooLateOrLeaseAllPaid();
         }
         uint64 nextPaymentDate = _users[_tokenId].expires + 30 days;
@@ -92,7 +92,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
         return super.supportsInterface(interfaceId);
     }
 
-    function _optionToBuy() internal {
+    function _optionToBuy() external {
         _purchased = true;
     }
 
