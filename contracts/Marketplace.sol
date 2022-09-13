@@ -20,6 +20,8 @@ error Marketplace__NftAlreadyRented();
 error Marketplace__lastRentingPeriodNotOver();
 error Marketplace__PaymentAmountDoesNotMatch();
 error Marketplace__YouCannotPurchaseYet();
+error Marketplace__YouHaveNoBalanceToWithdraw();
+error Marketplace__WithdrawFailed();
 
 contract Marketplace is ReentrancyGuard {
 
@@ -56,6 +58,7 @@ contract Marketplace is ReentrancyGuard {
     event OptionExercised(address indexed buyer, address indexed _nftAddress, uint256 indexed tokenId);
 
     mapping(address => mapping(uint256 => Listing)) public listings;
+    mapping(address => uint256) public rentBalance;
 
     function listNft(address _nftAddress, uint256 _tokenId, uint256 _rentPrice, uint256 _upFrontPayment, uint256 _purchasOptionPrice, uint256 _leasingDurationInMonth, uint256 _numberOfPaymentMade, uint64 _rentDuration) external payable {
         if(msg.sender != IERC721(_nftAddress).ownerOf(_tokenId)) {
@@ -99,6 +102,7 @@ contract Marketplace is ReentrancyGuard {
         if(listings[_nftAddress][_tokenId].tenant != address(0)) {
             revert Marketplace__NftAlreadyRented();
         }
+        rentBalance[listings[_nftAddress][_tokenId].owner] += msg.value;
         uint64 expires = uint64(block.timestamp + listings[_nftAddress][_tokenId].rentDuration);
         IERC4907(_nftAddress).setUser(_tokenId, msg.sender, expires);
         listings[_nftAddress][_tokenId].tenant = msg.sender;
@@ -110,6 +114,7 @@ contract Marketplace is ReentrancyGuard {
         if(msg.value < listings[_nftAddress][_tokenId].upfrontPayment + listings[_nftAddress][_tokenId].rentPrice) {
             revert Marketplace__AmountSentTooLow();
         }
+        rentBalance[listings[_nftAddress][_tokenId].owner] += msg.value;
         ILeasing(_nftAddress).setLessee(_tokenId, msg.sender, _lesseeName);
         emit CarLeased(msg.sender, _nftAddress, _tokenId, _lesseeName);
     }
@@ -118,9 +123,10 @@ contract Marketplace is ReentrancyGuard {
         if(msg.value != listings[_nftAddress][_tokenId].rentPrice) {
             revert Marketplace__PaymentAmountDoesNotMatch();
         }
+        rentBalance[listings[_nftAddress][_tokenId].owner] += msg.value;
         listings[_nftAddress][_tokenId].numberOfPaymentMade += 1;
         ILeasing(_nftAddress).renewMonthlyLeasing(_tokenId);
-        emit LeasePaid(msg.sender, _nftAddress, _tokenId)
+        emit LeasePaid(msg.sender, _nftAddress, _tokenId);
     }
 
     function buyLease(address _nftAddress, uint256 _tokenId) external payable {
@@ -130,8 +136,21 @@ contract Marketplace is ReentrancyGuard {
         if(listings[_nftAddress][_tokenId].numberOfPaymentMade < listings[_nftAddress][_tokenId].leasingDurationInMonth - 1) {
             revert Marketplace__YouCannotPurchaseYet();
         }
+        rentBalance[listings[_nftAddress][_tokenId].owner] += msg.value;
         ILeasing(_nftAddress)._optionToBuy();
         ILeasing(_nftAddress).safeTransferFrom(listings[_nftAddress][_tokenId].owner, msg.sender, _tokenId);
-        emit OptionExercised(msg.sender, _nftAddress, tokenId);
+        emit OptionExercised(msg.sender, _nftAddress, _tokenId);
+    }
+
+    function withdrawRent() external nonReentrant {
+        if(rentBalance[msg.sender] <= 0) {
+            revert Marketplace__YouHaveNoBalanceToWithdraw();
+        }
+        uint256 amount = rentBalance[msg.sender];
+        rentBalance[msg.sender] = 0;
+        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        if(!success) {
+            revert Marketplace__WithdrawFailed();
+        }
     }
 }

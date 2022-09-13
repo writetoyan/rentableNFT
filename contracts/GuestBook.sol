@@ -4,13 +4,15 @@ pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./ERC4907.sol";
 
 error GuestBook__NotEnoughETH();
 error GuestBook__NotAuthorizedToWrite();
 error GuestBook__WrongFinalOwner();
+error GuestBook__WithdrawFailed();
 
-contract GuestBook is ERC721URIStorage, ERC4907 {
+contract GuestBook is ERC721URIStorage, ERC4907, Ownable {
   using Counters for Counters.Counter;
   Counters.Counter private _tokenIds;
 
@@ -31,9 +33,9 @@ contract GuestBook is ERC721URIStorage, ERC4907 {
     uint256 newItemId = _tokenIds.current();
     finalOwner[newItemId] = _finalOwner;
     _safeMint(msg.sender, newItemId);
-    _setTokenURI(newItemId, _tokenURI);
-    return newItemId;
+    _setTokenURI(newItemId, _tokenURI); 
     emit NewGuestBook(newItemId, _tokenURI, _finalOwner);
+    return newItemId;
   }
 
   function writeCompliment(uint256 tokenId, string memory _message) external {
@@ -42,6 +44,13 @@ contract GuestBook is ERC721URIStorage, ERC4907 {
     }
     compliments.push(_message);
     emit ComplimentWritten(tokenId, msg.sender, _message);
+  }
+
+  function withdraw() external onlyOwner {
+    (bool succeed, ) = payable(msg.sender).call{value: address(this).balance}("");
+    if(!succeed) {
+      revert GuestBook__WithdrawFailed();
+    }
   }
 
   function transferFrom(address from, address to, uint256 tokenId) public override {
