@@ -52,7 +52,7 @@ contract Leasing is ERC721URIStorage, ERC4907, Ownable {
     event LesseeSetted(uint256 indexed tokenId, address indexed lesseeAddress, string indexed lesseeName);
 
 ///@dev Event emitted when the monthly payment of the lease is paid
-///@param _lessee is the address of the lessee
+///@param lessee is the address of the lessee
 ///@param rent is the amount paid
     event MonthlyLeasingPaid(uint256 indexed tokenId, address indexed lessee, uint256 indexed rent);
 
